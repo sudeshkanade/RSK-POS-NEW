@@ -1,0 +1,250 @@
+@import "tailwindcss";
+
+/* ─────────────────────────────────────────────
+   Tailwind v4: Register design tokens via @theme
+   These become first-class Tailwind utilities:
+   bg-surface, text-primary, text-secondary, etc.
+   ───────────────────────────────────────────── */
+@theme {
+  --color-surface: #09090b;
+  --color-surface-border: rgba(255,255,255,0.07);
+  --color-primary: #ffffff;
+  --color-secondary: #71717a;
+  --color-bg: #000000;
+  --font-family-sans: 'Inter', system-ui, sans-serif;
+}
+
+/* ─────────────────────────────────────────────
+   CSS Custom Properties for runtime theming
+   (these drive the manual utility classes below)
+   ───────────────────────────────────────────── */
+:root {
+  --bg-color: #000000;
+  --surface-color: #09090b;
+  --surface-border: rgba(255, 255, 255, 0.07);
+  --text-primary: #ffffff;
+  --text-secondary: #71717a;
+  --accent-color: #10b981;
+}
+
+[data-theme='light'] {
+  --bg-color: #f1f5f9;
+  --surface-color: #ffffff;
+  --surface-border: rgba(0, 0, 0, 0.08);
+  --text-primary: #0f172a;
+  --text-secondary: #64748b;
+  --accent-color: #059669;
+}
+
+/* ─────────────────────────────────────────────
+   Base styles
+   ───────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+html {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  margin: 0;
+  padding: 0;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  margin: 0;
+  padding: 0;
+  color: var(--text-primary);
+  background-color: var(--bg-color);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  overflow: hidden;
+  transition: background-color 0.4s ease, color 0.4s ease;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  opacity: 0.03;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+}
+
+/* ─────────────────────────────────────────────
+   Theme utility classes — defined via @layer so
+   Tailwind v4 does NOT purge them
+   ───────────────────────────────────────────── */
+@layer utilities {
+  .bg-theme-bg       { background-color: var(--bg-color); }
+  .bg-theme-surface  { background-color: var(--surface-color); }
+  .text-theme-primary   { color: var(--text-primary); }
+  .text-theme-secondary { color: var(--text-secondary); }
+  .border-theme-surface { border-color: var(--surface-border); }
+  .ring-theme-surface   { --tw-ring-color: var(--surface-border); }
+}
+
+/* ─────────────────────────────────────────────
+   Scrollbar
+   ───────────────────────────────────────────── */
+.custom-scrollbar { scrollbar-width: thin; scrollbar-color: var(--surface-border) transparent; }
+.custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: var(--surface-border); border-radius: 999px; }
+
+/* ─────────────────────────────────────────────
+   Transition helpers
+   ───────────────────────────────────────────── */
+.transition-theme {
+  transition: background-color 0.4s ease, color 0.4s ease, border-color 0.4s ease;
+}
+
+@keyframes subtle-glow {
+  0% { box-shadow: 0 0 20px rgba(16, 185, 129, 0.1); }
+  50% { box-shadow: 0 0 40px rgba(16, 185, 129, 0.2); }
+  100% { box-shadow: 0 0 20px rgba(16, 185, 129, 0.1); }
+}
+
+.animate-subtle-glow {
+  animation: subtle-glow 4s infinite ease-in-out;
+}
+
+.glass-card {
+  background: color-mix(in srgb, var(--surface-color) 75%, transparent);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--surface-border);
+  box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.15);
+  transition: background-color 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease;
+}
+
+:where(.noise-bg) {
+  position: relative;
+}
+
+.noise-bg::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  opacity: 0.03;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-shimmer {
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.05), transparent);
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+}
+
+.premium-gradient {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+}
+
+.premium-shadow {
+  box-shadow: 0 20px 50px rgba(0,0,0,0.3), 0 0 20px rgba(16,185,129,0.05);
+}
+
+@keyframes mesh-gradient {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.animate-mesh {
+  background: linear-gradient(-45deg, #000000, #09090b, #052e16, #000000);
+  background-size: 400% 400%;
+  animation: mesh-gradient 15s ease infinite;
+}
+.digital-receipt {
+  background: #fdfdfd;
+  color: #1a1a1a;
+  position: relative;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5), inset 0 0 100px rgba(0,0,0,0.05);
+  background-image: 
+    radial-gradient(#eee 1px, transparent 1px),
+    linear-gradient(rgba(0,0,0,0.02) 1px, transparent 1px);
+  background-size: 20px 20px, 100% 40px;
+}
+
+.digital-receipt::before {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  top: 0; left: 0; right: 0; height: 10px;
+  background: linear-gradient(180deg, rgba(0,0,0,0.05), transparent);
+}
+
+.digital-receipt::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  bottom: 0; left: 0; right: 0; height: 20px;
+  background: radial-gradient(circle at 10px 20px, transparent 10px, #fdfdfd 10px);
+  background-size: 20px 20px;
+  filter: drop-shadow(0 5px 5px rgba(0,0,0,0.1));
+}
+
+@keyframes paper-reveal {
+  from { transform: translateY(50px) scale(0.9); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+.animate-paper {
+  animation: paper-reveal 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Waitstaff page interactive classes */
+.waitstaff-input {
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 2px solid #262626;
+  background: #0a0a0a;
+  color: #fff;
+  font-size: 16px;
+  outline: none;
+  transition: border-color 0.2s ease;
+  width: 100%;
+}
+.waitstaff-input:focus {
+  border-color: #10b981;
+}
+
+.waitstaff-btn {
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: #10b981;
+  color: #000;
+  font-size: 15px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  letter-spacing: 0.05em;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: all 0.2s ease;
+  width: 100%;
+}
+.waitstaff-btn:hover {
+  background: #059669;
+}
+.waitstaff-btn:active {
+  opacity: 0.8;
+}

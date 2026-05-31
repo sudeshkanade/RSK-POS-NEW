@@ -1,0 +1,212 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/client"
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  CASHIER
+  CAPTAIN
+}
+
+enum TableStatus {
+  VACANT
+  OCCUPIED
+  BILL_PRINTED
+  SETTLED
+  DIRTY
+}
+
+enum OrderOrigin {
+  DINE_IN
+  TAKEAWAY
+  DELIVERY
+  SWIGGY
+  ZOMATO
+}
+
+enum OrderStatus {
+  PENDING
+  SETTLED
+  VOIDED
+}
+
+enum SyncStatus {
+  PENDING
+  SYNCED
+  FAILED
+}
+
+model Restaurant {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String?  @unique
+  address     String?
+  phone       String?
+  gstNo       String?
+  licenseKey  String?  @unique
+  isActive    Boolean  @default(true)
+  settings    Json?    // Tax configs, day-parting rules
+  users       User[]
+  tables      Table[]
+  categories  Category[]
+  orders      Order[]
+  inventory   InventoryItem[]
+  version     Int      @default(1)
+  syncStatus  SyncStatus @default(SYNCED)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Table {
+  id           String     @id @default(uuid())
+  name         String     // e.g., "Table 1"
+  status       TableStatus @default(VACANT)
+  capacity     Int        @default(4)
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  orders       Order[]
+  version      Int        @default(1)
+  syncStatus   SyncStatus @default(SYNCED)
+  updatedAt    DateTime   @updatedAt
+}
+
+model Category {
+  id           String     @id @default(uuid())
+  name         String
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  items        MenuItem[]
+  version      Int        @default(1)
+  syncStatus   SyncStatus @default(SYNCED)
+  updatedAt    DateTime   @updatedAt
+}
+
+model MenuItem {
+  id           String     @id @default(uuid())
+  name         String
+  description  String?
+  price        Float
+  shortcutKey  String?
+  categoryId   String
+  category     Category   @relation(fields: [categoryId], references: [id])
+  variations   Variation[]
+  modifiers    Modifier[]
+  recipes      Recipe[]
+  isAvailable  Boolean    @default(true)
+  version      Int        @default(1)
+  syncStatus   SyncStatus @default(SYNCED)
+  updatedAt    DateTime   @updatedAt
+}
+
+model Variation {
+  id         String   @id @default(uuid())
+  name       String   // e.g., "Small", "Large"
+  price      Float
+  menuItemId String
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
+  version    Int      @default(1)
+  syncStatus SyncStatus @default(SYNCED)
+  updatedAt  DateTime @updatedAt
+}
+
+model Modifier {
+  id         String   @id @default(uuid())
+  name       String
+  price      Float
+  menuItemId String
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
+  version    Int      @default(1)
+  syncStatus SyncStatus @default(SYNCED)
+  updatedAt  DateTime @updatedAt
+}
+
+model Order {
+  id            String      @id @default(uuid())
+  tableId       String?
+  table         Table?      @relation(fields: [tableId], references: [id])
+  restaurantId  String
+  restaurant    Restaurant  @relation(fields: [restaurantId], references: [id])
+  items         OrderItem[]
+  subtotal      Float
+  tax           Float
+  total         Float
+  status        OrderStatus @default(PENDING)
+  origin        OrderOrigin @default(DINE_IN)
+  settledById   String?     // Audit Log: Who closed the bill
+  syncStatus    SyncStatus  @default(PENDING)
+  version       Int         @default(1)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+model OrderItem {
+  id          String   @id @default(uuid())
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id])
+  menuItem    String   // Item name or ID snapshot
+  qty         Int
+  price       Float
+  modifiers   Json?    // Snapshot of applied modifiers
+  isPrinted   Boolean  @default(false)
+  isVoided    Boolean  @default(false)
+  voidReason  String?
+  voidedById  String?  // Audit Log: Who voided the item
+  version     Int      @default(1)
+  syncStatus  SyncStatus @default(PENDING)
+  updatedAt   DateTime @updatedAt
+}
+
+model InventoryItem {
+  id           String     @id @default(uuid())
+  name         String
+  unit         String     // e.g., "kg", "pcs"
+  shortcutKey  String?
+  stockLevel   Float      @default(0)
+  threshold    Float      @default(10)
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  recipes      Recipe[]
+  version      Int        @default(1)
+  syncStatus   SyncStatus @default(SYNCED)
+  updatedAt    DateTime   @updatedAt
+}
+
+model Recipe {
+  id              String        @id @default(uuid())
+  menuItemId      String
+  menuItem        MenuItem     @relation(fields: [menuItemId], references: [id])
+  inventoryItemId String
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id])
+  quantity        Float         // Amount of inventory item per 1 menu item
+  theoreticalCost Float         @default(0)
+  version         Int           @default(1)
+  syncStatus      SyncStatus    @default(SYNCED)
+  updatedAt       DateTime      @updatedAt
+}
+
+model User {
+  id           String     @id @default(uuid())
+  name         String
+  username     String?    @unique
+  password     String?    // Hashed for Dashboard
+  pin          String?    // 4-digit for POS
+  role         UserRole   @default(STAFF)
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  version      Int        @default(1)
+  syncStatus   SyncStatus @default(SYNCED)
+  updatedAt    DateTime   @updatedAt
+}
+
+enum UserRole {
+  ADMIN
+  MANAGER
+  STAFF
+}

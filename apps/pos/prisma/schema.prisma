@@ -1,0 +1,222 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./pos.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma-client"
+}
+
+model Restaurant {
+  id              String           @id @default(uuid())
+  name            String
+  address         String?
+  phone           String?
+  gstNo           String?
+  settings        String?          // JSON string
+  users           User[]
+  tables          Table[]
+  categories      Category[]
+  orders          Order[]
+  inventory       InventoryItem[]
+  auditLogs       AuditLog[]
+  rolePermissions RolePermission[]
+  version         Int              @default(1)
+  syncStatus      String           @default("SYNCED")
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+}
+
+model Table {
+  id           String     @id @default(uuid())
+  name         String
+  status       String     @default("VACANT")
+  capacity     Int        @default(4)
+  section      String     @default("Ground Floor")
+  posX         Float      @default(50)
+  posY         Float      @default(50)
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  orders       Order[]
+  version      Int        @default(1)
+  syncStatus   String     @default("SYNCED")
+  updatedAt    DateTime   @updatedAt
+}
+
+model Category {
+  id           String     @id @default(uuid())
+  name         String
+  sortOrder    Int        @default(0)
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  items        MenuItem[]
+  version      Int        @default(1)
+  syncStatus   String     @default("SYNCED")
+  updatedAt    DateTime   @updatedAt
+}
+
+model MenuItem {
+  id           String      @id @default(uuid())
+  name         String
+  description  String?
+  price        Float
+  shortcutKey  String?
+  isAvailable  Boolean     @default(true)
+  categoryId   String
+  category     Category    @relation(fields: [categoryId], references: [id])
+  variations   Variation[]
+  modifiers    Modifier[]
+  recipes      Recipe[]
+  version      Int         @default(1)
+  syncStatus   String      @default("SYNCED")
+  updatedAt    DateTime    @updatedAt
+}
+
+model Variation {
+  id         String   @id @default(uuid())
+  name       String
+  price      Float
+  menuItemId String
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
+  version    Int      @default(1)
+  syncStatus String   @default("SYNCED")
+  updatedAt  DateTime @updatedAt
+}
+
+model Modifier {
+  id         String   @id @default(uuid())
+  name       String
+  price      Float
+  menuItemId String
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
+  version    Int      @default(1)
+  syncStatus String   @default("SYNCED")
+  updatedAt  DateTime @updatedAt
+}
+
+model Order {
+  id            String      @id @default(uuid())
+  tableId       String?
+  table         Table?      @relation(fields: [tableId], references: [id])
+  restaurantId  String
+  restaurant    Restaurant  @relation(fields: [restaurantId], references: [id])
+  items         OrderItem[]
+  subtotal      Float       @default(0)
+  tax           Float       @default(0)
+  total         Float       @default(0)
+  status        String      @default("PENDING")
+  paymentMethod String?
+  origin        String      @default("DINE_IN")
+  notes         String?
+  openedAt      DateTime    @default(now())
+  closedAt      DateTime?
+  settledById   String?
+  syncStatus    String      @default("PENDING")
+  version       Int         @default(1)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+model OrderItem {
+  id         String   @id @default(uuid())
+  orderId    String
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItem   String
+  qty        Int
+  price      Float
+  modifiers  String?
+  isPrinted  Boolean  @default(false)
+  isVoided   Boolean  @default(false)
+  voidReason String?
+  voidedById String?
+  version    Int      @default(1)
+  syncStatus String   @default("PENDING")
+  updatedAt  DateTime @updatedAt
+}
+
+model InventoryItem {
+  id           String     @id @default(uuid())
+  name         String
+  unit         String
+  category     String     @default("General")
+  stockLevel   Float      @default(0)
+  minQty       Float      @default(10)
+  costPerUnit  Float      @default(0)
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  recipes      Recipe[]
+  version      Int        @default(1)
+  syncStatus   String     @default("SYNCED")
+  updatedAt    DateTime   @updatedAt
+}
+
+model Recipe {
+  id              String        @id @default(uuid())
+  menuItemId      String
+  menuItem        MenuItem      @relation(fields: [menuItemId], references: [id])
+  inventoryItemId String
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id])
+  quantity        Float
+  theoreticalCost Float         @default(0)
+  version         Int           @default(1)
+  syncStatus      String        @default("SYNCED")
+  updatedAt       DateTime      @updatedAt
+}
+
+model Shift {
+  id           String    @id @default(uuid())
+  restaurantId String
+  openedBy     String
+  closedBy     String?
+  openedAt     DateTime  @default(now())
+  closedAt     DateTime?
+  openingCash  Float     @default(0)
+  closingCash  Float?
+  totalSales   Float     @default(0)
+  status       String    @default("OPEN")
+  updatedAt    DateTime  @updatedAt
+}
+
+model SyncMetadata {
+  id       String   @id @default("singleton")
+  lastSync DateTime @default(now())
+}
+
+model User {
+  id           String      @id @default(uuid())
+  name         String
+  username     String?     // Login username (falls back to name.toLowerCase() if null)
+  pin          String?     // Stores the password (kept as 'pin' for DB compatibility)
+  role         String      @default("STAFF")
+  isActive     Boolean     @default(true)
+  restaurantId String?
+  restaurant   Restaurant? @relation(fields: [restaurantId], references: [id])
+  version      Int         @default(1)
+  syncStatus   String      @default("SYNCED")
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  auditLogs    AuditLog[]
+}
+
+model AuditLog {
+  id           String     @id @default(uuid())
+  action       String     // e.g. "ITEM_VOID", "BILL_OPENED", "DISCOUNT_APPLIED"
+  details      String     // text description / JSON
+  userId       String
+  user         User       @relation(fields: [userId], references: [id])
+  approvedById String?    // PIN override auditor
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  createdAt    DateTime   @default(now())
+}
+
+model RolePermission {
+  id           String     @id @default(uuid())
+  role         String     // role name like "STAFF", "MANAGER", "ADMIN"
+  permission   String     // action name like "CAN_VOID", "CAN_DISCOUNT"
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+
+  @@unique([role, permission, restaurantId])
+}

@@ -1,0 +1,29 @@
+# ------------------------------------------------------
+# THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
+# ------------------------------------------------------
+
+"""
+A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date-time format.
+"""
+scalar DateTime
+
+type Mutation {
+  createRestaurant(name: String!): Restaurant!
+  onboardRestaurant(name: String!, slug: String!): Restaurant!
+}
+
+type Query {
+  restaurant(id: String!): Restaurant
+  restaurants: [Restaurant!]!
+}
+
+type Restaurant {
+  address: String
+  createdAt: DateTime!
+  gstNo: String
+  id: ID!
+  name: String!
+  phone: String
+  updatedAt: DateTime!
+  version: Int!
+}

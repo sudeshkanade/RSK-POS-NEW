@@ -1,0 +1,104 @@
+{
+  "name": "@repo/pos",
+  "version": "0.1.0",
+  "description": "RestroOS Restaurant POS Terminal",
+  "author": "RSK Solutions",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "dev": "next dev --port 3002 --webpack",
+    "build": "next build --webpack",
+    "start": "next start",
+    "lint": "eslint",
+    "prisma:generate": "npx prisma generate",
+    "prisma:migrate": "npx prisma migrate dev",
+    "prisma:seed": "npx tsx prisma/seed.ts",
+    "electron": "electron .",
+    "electron:dev": "concurrently \"next dev -p 3002 --webpack\" \"wait-on http://localhost:3002 && electron .\"",
+    "electron:build": "npm run build && node -e \"require('fs').copyFileSync('src/generated/prisma-client/query_engine-windows.dll.node', 'prisma/query_engine-windows.dll.node')\" && electron-builder"
+  },
+  "build": {
+    "appId": "com.rsk.restroos",
+    "productName": "RestroOS Terminal",
+    "publish": {
+      "provider": "github",
+      "owner": "rsk-solutions",
+      "repo": "restroos-terminal"
+    },
+    "asar": true,
+    "asarUnpack": [
+      "server-runner.js",
+      "prisma/**/*",
+      "node_modules/.prisma/**/*",
+      "src/generated/**/*"
+    ],
+    "directories": {
+      "output": "dist_electron"
+    },
+    "electronVersion": "31.7.7",
+    "win": {
+      "target": [
+        "portable",
+        "nsis"
+      ]
+    },
+    "portable": {
+      "artifactName": "RestroOS_Portable_${version}.exe"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "server-runner.js",
+      "loading.html",
+      ".next/**/*",
+      "!.next/cache/**/*",
+      "node_modules/**/*",
+      "prisma/**/*",
+      "src/generated/**/*",
+      "package.json",
+      "public/**/*",
+      "!src/components/**/*",
+      "!src/app/**/*",
+      "!src/services/**/*",
+      "!src/store/**/*",
+      "!**/*.ts",
+      "!**/*.tsx"
+    ]
+  },
+  "prisma": {
+    "seed": "npx tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/modifiers": "^9.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
+    "@ducanh2912/next-pwa": "^10.2.9",
+    "@prisma/client": "^5.22.0",
+    "@repo/database": "*",
+    "axios": "^1.15.2",
+    "electron-is-dev": "^2.0.0",
+    "electron-updater": "^6.8.3",
+    "next": "16.2.4",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "socket.io-client": "^4.8.3",
+    "sqlite3": "^6.0.1",
+    "zustand": "^5.0.12"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "concurrently": "^8.2.2",
+    "electron": "31.7.7",
+    "electron-builder": "^26.8.1",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.4",
+    "prisma": "^5.22.0",
+    "tailwindcss": "^4",
+    "ts-node": "^10.9.2",
+    "typescript": "^5",
+    "wait-on": "^7.2.0"
+  }
+}

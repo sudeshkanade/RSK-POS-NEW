@@ -53,6 +53,7 @@ interface POSState {
   isInitialized: boolean;
   fetchInitialData: () => Promise<void>;
   syncWithDb: () => Promise<void>;
+  triggerDbSync: (tableId: string) => Promise<void>;
 
   // Tables
   tables: Table[];
@@ -351,6 +352,23 @@ export const usePOSStore = create<POSState>()(
         }
       },
 
+      triggerDbSync: async (tableId: string) => {
+        const order = get().orders[tableId];
+        if (!order) return;
+        try {
+          await fetch('/api/orders/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              tableId,
+              items: order.items,
+            }),
+          });
+        } catch (e) {
+          console.error('Failed to trigger database sync for table', tableId, e);
+        }
+      },
+
       saveLayoutToDb: async () => {
         const { tables } = get();
         await Promise.all(tables.map(t => 
@@ -427,56 +445,68 @@ export const usePOSStore = create<POSState>()(
 
       getOrder: (tableId) => get().orders[tableId] ?? emptyOrder(tableId),
 
-      addItem: (tableId, mi) => set(s => {
-        const order = s.orders[tableId] ?? emptyOrder(tableId);
-        const exists = order.items.find(i => i.name === mi.name && !i.isVoided);
-        const items = exists
-          ? order.items.map(i => i.name === mi.name && !i.isVoided ? { ...i, qty: i.qty + 1, isNew: true, addedBy: get().activeUser?.name } : i)
-          : [...order.items, { ...mi, isNew: true, isVoided: false, addedBy: get().activeUser?.name }];
+      addItem: (tableId, mi) => {
+        set(s => {
+          const order = s.orders[tableId] ?? emptyOrder(tableId);
+          const exists = order.items.find(i => i.name === mi.name && !i.isVoided);
+          const items = exists
+            ? order.items.map(i => i.name === mi.name && !i.isVoided ? { ...i, qty: i.qty + 1, isNew: true, addedBy: get().activeUser?.name } : i)
+            : [...order.items, { ...mi, isNew: true, isVoided: false, addedBy: get().activeUser?.name }];
 
-        const table = s.tables.find(t => t.id === tableId);
-        // Only update status + persist if table was VACANT (avoid redundant API calls)
-        if (table?.status === 'VACANT') get().updateTableStatus(tableId, 'OCCUPIED');
+          const table = s.tables.find(t => t.id === tableId);
+          // Only update status + persist if table was VACANT (avoid redundant API calls)
+          if (table?.status === 'VACANT') get().updateTableStatus(tableId, 'OCCUPIED');
 
-        const updatedOrders = { ...s.orders, [tableId]: { ...order, items } };
-        socketService.emit('SYNC_EVENT', { type: 'ORDER_UPDATE', payload: { tableId, order: updatedOrders[tableId] } });
-        return { orders: updatedOrders };
-      }),
+          const updatedOrders = { ...s.orders, [tableId]: { ...order, items } };
+          socketService.emit('SYNC_EVENT', { type: 'ORDER_UPDATE', payload: { tableId, order: updatedOrders[tableId] } });
+          return { orders: updatedOrders };
+        });
+        get().triggerDbSync(tableId);
+      },
 
-      updateItemQty: (tableId, itemId, delta) => set(s => {
-        const order = s.orders[tableId] ?? emptyOrder(tableId);
-        const items = order.items.map(i => {
-          if (i.id !== itemId) return i;
-          const newQty = Math.max(0, i.qty + delta);
-          return { ...i, qty: newQty, isNew: delta > 0 ? true : i.isNew };
-        }).filter(i => i.qty > 0 || i.isVoided);
+      updateItemQty: (tableId, itemId, delta) => {
+        set(s => {
+          const order = s.orders[tableId] ?? emptyOrder(tableId);
+          const items = order.items.map(i => {
+            if (i.id !== itemId) return i;
+            const newQty = Math.max(0, i.qty + delta);
+            return { ...i, qty: newQty, isNew: delta > 0 ? true : i.isNew };
+          }).filter(i => i.qty > 0 || i.isVoided);
 
-        const updatedOrders = { ...s.orders, [tableId]: { ...order, items } };
-        socketService.emit('SYNC_EVENT', { type: 'ORDER_UPDATE', payload: { tableId, order: updatedOrders[tableId] } });
-        return { orders: updatedOrders };
-      }),
+          const updatedOrders = { ...s.orders, [tableId]: { ...order, items } };
+          socketService.emit('SYNC_EVENT', { type: 'ORDER_UPDATE', payload: { tableId, order: updatedOrders[tableId] } });
+          return { orders: updatedOrders };
+        });
+        get().triggerDbSync(tableId);
+      },
 
-      voidItem: (tableId, itemId, reason) => set(s => {
-        const order = s.orders[tableId] ?? emptyOrder(tableId);
-        const items = order.items.map(i =>
-          i.id === itemId ? { ...i, isVoided: true, voidReason: reason, voidedBy: get().activeUser?.name } : i
-        );
-        const updatedOrders = { ...s.orders, [tableId]: { ...order, items } };
-        socketService.emit('SYNC_EVENT', { type: 'ORDER_UPDATE', payload: { tableId, order: updatedOrders[tableId] } });
-        return { orders: updatedOrders };
-      }),
+      voidItem: (tableId, itemId, reason) => {
+        set(s => {
+          const order = s.orders[tableId] ?? emptyOrder(tableId);
+          const items = order.items.map(i =>
+            i.id === itemId ? { ...i, isVoided: true, voidReason: reason, voidedBy: get().activeUser?.name } : i
+          );
+          const updatedOrders = { ...s.orders, [tableId]: { ...order, items } };
+          socketService.emit('SYNC_EVENT', { type: 'ORDER_UPDATE', payload: { tableId, order: updatedOrders[tableId] } });
+          return { orders: updatedOrders };
+        });
+        get().triggerDbSync(tableId);
+      },
 
-      markKOTSent: (tableId) => set(s => {
-        const order = s.orders[tableId] ?? emptyOrder(tableId);
-        const items = order.items.map(i => ({ ...i, isNew: false }));
-        const updatedOrders = { ...s.orders, [tableId]: { ...order, items } };
-        socketService.emit('SYNC_EVENT', { type: 'ORDER_UPDATE', payload: { tableId, order: updatedOrders[tableId] } });
-        
-        // Also alert kitchen via socket
-        socketService.emit('KOT_ALERT', { tableId, tableName: s.tables.find(t => t.id === tableId)?.name });
+      markKOTSent: (tableId) => {
+        set(s => {
+          const order = s.orders[tableId] ?? emptyOrder(tableId);
+          const items = order.items.map(i => ({ ...i, isNew: false }));
+          const updatedOrders = { ...s.orders, [tableId]: { ...order, items } };
+          socketService.emit('SYNC_EVENT', { type: 'ORDER_UPDATE', payload: { tableId, order: updatedOrders[tableId] } });
+          
+          // Also alert kitchen via socket
+          socketService.emit('KOT_ALERT', { tableId, tableName: s.tables.find(t => t.id === tableId)?.name });
 
-        return { orders: updatedOrders };
-      }),
+          return { orders: updatedOrders };
+        });
+        get().triggerDbSync(tableId);
+      },
 
       setPaymentMethod: (tableId, method) => set(s => {
         const order = s.orders[tableId] ?? emptyOrder(tableId);
@@ -552,6 +582,8 @@ export const usePOSStore = create<POSState>()(
 
           return { orders: updatedOrders };
         });
+        get().triggerDbSync(fromTableId);
+        get().triggerDbSync(toTableId);
       },
 
       // ── Sections ──

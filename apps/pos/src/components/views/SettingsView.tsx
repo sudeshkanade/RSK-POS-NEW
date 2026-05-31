@@ -42,6 +42,64 @@ export const SettingsView: React.FC = () => {
   const [shiftStart, setShiftStart] = useState('10:00');
   const [gstRate, setGstRate] = useState('0');
 
+  // License & Activation state
+  const [licenseInfo, setLicenseInfo] = useState<any>(null);
+  const [isTrial, setIsTrial] = useState(false);
+  const [trialDays, setTrialDays] = useState<number | null>(null);
+  const [activationKey, setActivationKey] = useState('');
+  const [activationError, setActivationError] = useState('');
+  const [activating, setActivating] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const fetchLicenseInfo = async () => {
+    try {
+      const res = await fetch('/api/license');
+      const data = await res.json();
+      setLicenseInfo(data);
+      if (data.status === 'TRIAL') {
+        setIsTrial(true);
+        setTrialDays(data.daysRemaining);
+      } else {
+        setIsTrial(false);
+        setTrialDays(0);
+      }
+    } catch (e) {
+      console.error('Failed to load license details', e);
+    }
+  };
+
+  const handleCopyHardwareId = () => {
+    if (!licenseInfo?.hardwareId) return;
+    navigator.clipboard.writeText(licenseInfo.hardwareId);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleActivate = async () => {
+    setActivationError('');
+    setActivating(true);
+    try {
+      const res = await fetch('/api/license', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: activationKey.trim().toUpperCase() }),
+      });
+      const data = await res.json();
+      if (data.success && data.status === 'ACTIVE') {
+        setIsTrial(false);
+        setTrialDays(0);
+        setLicenseInfo(data);
+        alert('🎉 RestroOS successfully activated! Thank you.');
+      } else {
+        setActivationError(data.error || 'Invalid activation key for this machine');
+      }
+    } catch (e) {
+      setActivationError('Connection error. Please try again.');
+    } finally {
+      setActivating(false);
+    }
+  };
+
   // Load settings on mount
   useEffect(() => {
     fetch('/api/settings')
@@ -61,6 +119,8 @@ export const SettingsView: React.FC = () => {
       })
       .catch(console.error)
       .finally(() => setLoading(false));
+
+    fetchLicenseInfo();
   }, []);
 
   const save = async () => {
@@ -167,7 +227,87 @@ export const SettingsView: React.FC = () => {
           </div>
         </Section>
 
-        <div className="flex flex-col justify-end pb-10">
+        <Section title="License & Activation" icon="🔑">
+          {licenseInfo && (
+            <>
+              {/* Status Indicator */}
+              <div className="mb-6 flex justify-between items-center bg-zinc-950/40 p-4 rounded-xl border border-white/5">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Current Status</span>
+                {isTrial ? (
+                  <span className="text-xs font-bold text-amber-500 bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/20">
+                    ⚠️ TRIAL: {trialDays} Days Left
+                  </span>
+                ) : (
+                  <span className="text-xs font-bold text-emerald-400 bg-emerald-400/10 px-3 py-1 rounded-full border border-emerald-400/20">
+                    ✓ License Active
+                  </span>
+                )}
+              </div>
+
+              {/* Machine Hardware ID */}
+              <div className="mb-6">
+                <label className="block text-[9px] font-bold uppercase tracking-widest text-zinc-500 mb-2">Machine Hardware ID</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={licenseInfo.hardwareId || 'UNKNOWN'}
+                    className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm font-mono font-bold text-emerald-400 text-center focus:outline-none"
+                  />
+                  <button
+                    onClick={handleCopyHardwareId}
+                    className="px-4 py-3 bg-zinc-900 border border-white/10 hover:border-emerald-500/30 text-zinc-300 hover:text-emerald-400 rounded-xl font-bold uppercase tracking-widest text-[9px] transition-colors"
+                  >
+                    {copied ? 'Copied!' : 'Copy'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Support Details */}
+              <div className="mb-6 p-4 rounded-xl bg-zinc-950/20 border border-white/5 text-left">
+                <label className="block text-[9px] font-bold uppercase tracking-widest text-zinc-500 mb-2">Partner Details</label>
+                <p className="text-xs text-white font-bold mb-1">RSK Solutions</p>
+                <p className="text-[11px] text-zinc-400 mb-1">Developer: <span className="text-zinc-300 font-semibold">Sudesh Kanade</span></p>
+                <p className="text-[11px] text-zinc-400 mb-3">Email: <a href="mailto:support@rsk.solutions" className="text-emerald-400 hover:underline">support@rsk.solutions</a></p>
+                <p className="text-[10px] text-zinc-500 leading-tight italic">
+                  * Send your Machine Hardware ID to get a permanent activation key.
+                </p>
+              </div>
+
+              {/* Activation Key Entry (only if trial/expired) */}
+              {isTrial && (
+                <div className="mb-2">
+                  <label className="block text-[9px] font-bold uppercase tracking-widest text-zinc-500 mb-2">Enter Activation Key</label>
+                  <div className="flex flex-col gap-2">
+                    <input
+                      type="text"
+                      placeholder="RSK-XXXX-XXXX-XXXX"
+                      value={activationKey}
+                      onChange={e => setActivationKey(e.target.value.toUpperCase())}
+                      className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white text-center placeholder:text-zinc-700 focus:outline-none focus:border-emerald-500 transition-colors"
+                    />
+                    {activationError && (
+                      <p className="text-rose-500 font-bold text-[10px] uppercase tracking-wider text-center">{activationError}</p>
+                    )}
+                    <button
+                      onClick={handleActivate}
+                      disabled={activating || !activationKey.trim()}
+                      className={`w-full py-4 mt-2 rounded-xl font-bold uppercase tracking-widest text-xs transition-all ${
+                        activating || !activationKey.trim()
+                          ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
+                          : 'bg-emerald-500 text-black hover:scale-[1.02] shadow-lg'
+                      }`}
+                    >
+                      {activating ? 'Activating...' : 'Activate System'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </Section>
+
+        <div className="xl:col-span-2 flex flex-col justify-end pb-10">
           <button
             onClick={save}
             disabled={saving}

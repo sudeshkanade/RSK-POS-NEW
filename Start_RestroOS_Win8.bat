@@ -48,11 +48,32 @@ cd apps\pos
 call npx prisma generate
 cd ..\..
 
-:: 5. Build Next.js POS app if not built
-if not exist "apps\pos\.next" (
-    echo [*] POS application build not found. Compiling POS web assets...
-    call npm run build --workspace=@repo/pos
+:: 5. Auto-Update from GitHub and Recompile POS assets if needed
+where git >nul 2>&1
+if %errorlevel% equ 0 (
+    echo [*] Checking for updates from GitHub...
+    git pull origin main > git_pull_result.txt 2>&1
+    type git_pull_result.txt
+    findstr /C:"Already up to date." git_pull_result.txt >nul
+    if %errorlevel% neq 0 (
+        echo [*] New updates found! Recompiling POS web assets...
+        call npm run build --workspace=@repo/pos
+    ) else (
+        echo [*] Application is up to date.
+        if not exist "apps\pos\.next" (
+            echo [*] Build folder missing. Compiling POS web assets...
+            call npm run build --workspace=@repo/pos
+        )
+    )
+    if exist git_pull_result.txt del git_pull_result.txt
+) else (
+    echo [!] Git not found. Skipping automatic updates.
+    if not exist "apps\pos\.next" (
+        echo [*] Compiling POS web assets...
+        call npm run build --workspace=@repo/pos
+    )
 )
+
 
 :: 6. Launch POS Web Server
 echo.

@@ -55,6 +55,47 @@ export const FloorMap: React.FC = () => {
   const [showMobileConnect, setShowMobileConnect] = useState(false);
   const [hostIp, setHostIp] = useState('192.168.1.XX');
 
+  // License & Trial details modal state
+  const [showLicenseModal, setShowLicenseModal] = useState(false);
+  const [licenseInfo, setLicenseInfo] = useState<any>(null);
+  const [activationKey, setActivationKey] = useState('');
+  const [activationError, setActivationError] = useState('');
+  const [activating, setActivating] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyHardwareId = () => {
+    if (!licenseInfo?.hardwareId) return;
+    navigator.clipboard.writeText(licenseInfo.hardwareId);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleActivate = async () => {
+    setActivationError('');
+    setActivating(true);
+    try {
+      const res = await fetch('/api/license', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: activationKey.trim().toUpperCase() }),
+      });
+      const data = await res.json();
+      if (data.success && data.status === 'ACTIVE') {
+        setIsTrial(false);
+        setTrialDays(0);
+        setLicenseInfo(data);
+        setShowLicenseModal(false);
+        alert('🎉 RestroOS successfully activated! Thank you.');
+      } else {
+        setActivationError(data.error || 'Invalid activation key for this machine');
+      }
+    } catch (e) {
+      setActivationError('Connection error. Please try again.');
+    } finally {
+      setActivating(false);
+    }
+  };
+
   useEffect(() => {
     fetch('/api/settings/ip')
       .then(res => res.json())
@@ -87,22 +128,25 @@ export const FloorMap: React.FC = () => {
   }, [isInitialized, fetchInitialData]);
 
   // Load trial / license status
-  useEffect(() => {
-    const checkLicense = async () => {
-      try {
-        const res = await fetch('/api/license');
-        const data = await res.json();
-        if (data.status === 'TRIAL') {
-          setIsTrial(true);
-          setTrialDays(data.daysRemaining);
-        } else {
-          setIsTrial(false);
-        }
-      } catch (e) {
-        console.error('Failed to load license details', e);
+  const fetchLicenseInfo = async () => {
+    try {
+      const res = await fetch('/api/license');
+      const data = await res.json();
+      setLicenseInfo(data);
+      if (data.status === 'TRIAL') {
+        setIsTrial(true);
+        setTrialDays(data.daysRemaining);
+      } else {
+        setIsTrial(false);
+        setTrialDays(0);
       }
-    };
-    checkLicense();
+    } catch (e) {
+      console.error('Failed to load license details', e);
+    }
+  };
+
+  useEffect(() => {
+    fetchLicenseInfo();
   }, []);
 
   // Show walkthrough on first boot
@@ -292,7 +336,14 @@ export const FloorMap: React.FC = () => {
                   </>
                 )}
 
-                <div className="flex flex-col items-end mr-1 shrink-0 trial-info-badge transition-all">
+                <div 
+                  onClick={async () => {
+                    await fetchLicenseInfo();
+                    setShowLicenseModal(true);
+                  }}
+                  className="flex flex-col items-end mr-1 shrink-0 trial-info-badge transition-all cursor-pointer hover:opacity-80"
+                  title="Click to view License details"
+                >
                   {isTrial ? (
                     <div className="bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 rounded-full mb-1 animate-pulse">
                       <span className="text-[7px] font-bold uppercase tracking-[0.1em] text-amber-500">
@@ -611,6 +662,106 @@ export const FloorMap: React.FC = () => {
             >
               Done
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* License / Trial Information Modal */}
+      {showLicenseModal && licenseInfo && (
+        <div
+          className="fixed inset-0 z-[600] flex items-center justify-center p-6 animate-in fade-in duration-250"
+          style={{ backgroundColor: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(10px)' }}
+          onClick={() => setShowLicenseModal(false)}
+        >
+          <div
+            style={{ backgroundColor: 'var(--surface-color)' }}
+            className="p-8 md:p-10 rounded-3xl flex flex-col max-w-md w-full shadow-2xl border border-white/10 noise-bg relative animate-in zoom-in-95 duration-200"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-2xl font-bold tracking-tighter uppercase text-white">License Details</h3>
+              <button
+                onClick={() => setShowLicenseModal(false)}
+                className="w-8 h-8 rounded-full border border-white/10 flex items-center justify-center text-xs hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Trial Status Badge */}
+            <div className="mb-6 flex justify-between items-center bg-zinc-950/40 p-4 rounded-xl border border-white/5">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Current Status</span>
+              {isTrial ? (
+                <span className="text-xs font-bold text-amber-500 bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/20">
+                  ⚠️ TRIAL: {trialDays} Days Left
+                </span>
+              ) : (
+                <span className="text-xs font-bold text-emerald-400 bg-emerald-400/10 px-3 py-1 rounded-full border border-emerald-400/20">
+                  ✓ License Active
+                </span>
+              )}
+            </div>
+
+            {/* Machine Details / Hardware ID */}
+            <div className="mb-6">
+              <label className="block text-[9px] font-bold uppercase tracking-widest text-zinc-500 mb-2">Machine Hardware ID</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  readOnly
+                  value={licenseInfo.hardwareId || 'UNKNOWN'}
+                  className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm font-mono font-bold text-emerald-400 text-center focus:outline-none"
+                />
+                <button
+                  onClick={handleCopyHardwareId}
+                  className="px-4 py-3 bg-zinc-900 border border-white/10 hover:border-emerald-500/30 text-zinc-300 hover:text-emerald-400 rounded-xl font-bold uppercase tracking-widest text-[9px] transition-colors"
+                >
+                  {copied ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+            </div>
+
+            {/* Developer / Partner Details */}
+            <div className="mb-8 p-4 rounded-xl bg-zinc-950/20 border border-white/5 text-left">
+              <label className="block text-[9px] font-bold uppercase tracking-widest text-zinc-500 mb-2">Partner Details</label>
+              <p className="text-xs text-white font-bold mb-1">RSK Solutions</p>
+              <p className="text-[11px] text-zinc-400 mb-1">Developer: <span className="text-zinc-300 font-semibold">Sudesh Kanade</span></p>
+              <p className="text-[11px] text-zinc-400 mb-3">Email: <a href="mailto:support@rsk.solutions" className="text-emerald-400 hover:underline">support@rsk.solutions</a></p>
+              <p className="text-[10px] text-zinc-500 leading-tight italic">
+                * Send your Machine Hardware ID to get a permanent activation key.
+              </p>
+            </div>
+
+            {/* Activation field (Only if in Trial mode) */}
+            {isTrial && (
+              <div className="mb-2">
+                <label className="block text-[9px] font-bold uppercase tracking-widest text-zinc-500 mb-2">Enter Activation Key</label>
+                <div className="flex flex-col gap-2">
+                  <input
+                    type="text"
+                    placeholder="RSK-XXXX-XXXX-XXXX"
+                    value={activationKey}
+                    onChange={e => setActivationKey(e.target.value.toUpperCase())}
+                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white text-center placeholder:text-zinc-700 focus:outline-none focus:border-emerald-500 transition-colors"
+                  />
+                  {activationError && (
+                    <p className="text-rose-500 font-bold text-[10px] uppercase tracking-wider text-center">{activationError}</p>
+                  )}
+                  <button
+                    onClick={handleActivate}
+                    disabled={activating || !activationKey.trim()}
+                    className={`w-full py-4 mt-2 rounded-xl font-bold uppercase tracking-widest text-xs transition-all ${
+                      activating || !activationKey.trim()
+                        ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
+                        : 'bg-emerald-500 text-black hover:scale-[1.02] shadow-lg'
+                    }`}
+                  >
+                    {activating ? 'Activating...' : 'Activate System'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

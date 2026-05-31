@@ -22,8 +22,8 @@
     "productName": "RestroOS Terminal",
     "publish": {
       "provider": "github",
-      "owner": "rsk-solutions",
-      "repo": "restroos-terminal"
+      "owner": "sudeshkanade",
+      "repo": "RSK-POS-NEW"
     },
     "asar": true,
     "asarUnpack": [

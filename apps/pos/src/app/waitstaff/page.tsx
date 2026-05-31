@@ -4,7 +4,7 @@ import { socketService } from '../../services/socket.service';
 
 /* ─── Types ───────────────────────────────────────────────── */
 interface Table  { id: string; name: string; section: string; status: string; capacity: number; }
-interface MenuItem { id: string; name: string; price: number; description?: string; }
+interface MenuItem { id: string; name: string; price: number; description?: string; shortcutKey?: string | null; }
 interface Category { id: string; name: string; items: MenuItem[]; }
 interface CartItem  { id: string; name: string; price: number; qty: number; }
 
@@ -25,6 +25,7 @@ export default function WaitstaffPage() {
   const [errorLog, setErrorLog]   = useState<string>('');
   const [staffList, setStaffList] = useState<{ id: string; name: string; isActive: boolean }[]>([]);
   const [existingOrderItems, setExistingOrderItems] = useState<{ name: string; qty: number; price: number }[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Pure React focus, hover, and active states to replace unsafe style blocks
   const [isInputFocused, setIsInputFocused] = useState(false);
@@ -218,6 +219,7 @@ export default function WaitstaffPage() {
         setCart([]);
         setScreen('tables');
         setSelectedTable(null);
+        setSearchQuery('');
         await loadTables();
         showToast('✅ Order sent to kitchen!');
       } else {
@@ -365,6 +367,16 @@ export default function WaitstaffPage() {
   if (screen === 'menu') {
     const safeCategories = Array.isArray(categories) ? categories : [];
     const activeCat = safeCategories.find(c => c.id === activeCategory);
+    
+    // Filter items based on search query dynamically across all categories
+    const displayedItems = searchQuery.trim()
+      ? safeCategories.flatMap(c => c.items.map(i => ({ ...i, categoryName: c.name })))
+          .filter(i => 
+            i.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (i.shortcutKey && String(i.shortcutKey).trim().toLowerCase().includes(searchQuery.trim().toLowerCase()))
+          )
+      : (activeCat?.items ?? []);
+
     return (
       <div style={styles.page}>
         {toast && <div style={styles.toast}>{toast}</div>}
@@ -379,7 +391,7 @@ export default function WaitstaffPage() {
             <button style={styles.cartBadgeBtn} onClick={() => setScreen('cart')}>
               🛒 {cartCount > 0 ? <span style={styles.badge}>{cartCount}</span> : null}
             </button>
-            <button style={styles.backBtn} onClick={() => { setScreen('tables'); setCart([]); setSelectedTable(null); }}>✕</button>
+            <button style={styles.backBtn} onClick={() => { setScreen('tables'); setCart([]); setSelectedTable(null); setSearchQuery(''); }}>✕</button>
           </div>
         </div>
 
@@ -403,23 +415,70 @@ export default function WaitstaffPage() {
           </div>
         )}
 
-        {/* Category tabs */}
-        <div style={styles.catRow}>
-          {safeCategories.map(cat => (
-            <button
-              key={cat.id}
-              style={{ ...styles.catTab, ...(activeCategory === cat.id ? styles.catTabActive : {}) }}
-              onClick={() => setActiveCategory(cat.id)}
-            >
-              {cat.name}
-            </button>
-          ))}
+        {/* Search Bar for Waitstaff Mobile Menu */}
+        <div style={{ padding: '12px 16px 4px 16px', flexShrink: 0 }}>
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+            <span style={{ position: 'absolute', left: '14px', color: '#6b7280', fontSize: '14px' }}>🔍</span>
+            <input
+              type="text"
+              placeholder="SEARCH BY ITEM OR SHORTCUT..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '12px 16px 12px 40px',
+                borderRadius: '12px',
+                border: '1px solid #262626',
+                background: '#141414',
+                color: '#fff',
+                fontSize: '13px',
+                fontWeight: 'bold',
+                outline: 'none',
+                letterSpacing: '0.05em',
+              }}
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                style={{
+                  position: 'absolute',
+                  right: '12px',
+                  background: 'none',
+                  border: 'none',
+                  color: '#9ca3af',
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                }}
+              >
+                ✕
+              </button>
+            )}
+          </div>
         </div>
+
+        {/* Category tabs */}
+        {!searchQuery.trim() ? (
+          <div style={styles.catRow}>
+            {safeCategories.map(cat => (
+              <button
+                key={cat.id}
+                style={{ ...styles.catTab, ...(activeCategory === cat.id ? styles.catTabActive : {}) }}
+                onClick={() => setActiveCategory(cat.id)}
+              >
+                {cat.name}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div style={{ padding: '8px 16px 2px 16px', fontSize: '11px', fontWeight: '700', color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.12em', flexShrink: 0 }}>
+            🔍 Found {displayedItems.length} matching item{displayedItems.length !== 1 ? 's' : ''}
+          </div>
+        )}
 
         {/* Items */}
         <div style={styles.scroll}>
           <div style={styles.itemGrid}>
-            {(activeCat?.items ?? []).map(item => {
+            {displayedItems.map(item => {
               const inCart = safeCart.find(c => c.id === item.id);
               return (
                 <button
@@ -427,7 +486,24 @@ export default function WaitstaffPage() {
                   style={{ ...styles.itemCard, ...(inCart ? styles.itemCardActive : {}) }}
                   onClick={() => addToCart(item)}
                 >
-                  <div style={styles.itemName}>{item.name}</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+                    <div style={styles.itemName}>{item.name}</div>
+                    {item.shortcutKey && (
+                      <span style={{
+                        fontSize: '8px',
+                        fontWeight: 'bold',
+                        background: '#262626',
+                        color: '#10b981',
+                        padding: '1.5px 4.5px',
+                        borderRadius: '4px',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
+                        flexShrink: 0
+                      }}>
+                        {item.shortcutKey}
+                      </span>
+                    )}
+                  </div>
                   {item.description && <div style={styles.itemDesc}>{item.description}</div>}
                   <div style={styles.itemPrice}>₹{item.price.toFixed(2)}</div>
                   {inCart && <div style={styles.itemQtyBadge}>×{inCart.qty}</div>}
@@ -435,6 +511,9 @@ export default function WaitstaffPage() {
               );
             })}
           </div>
+          {displayedItems.length === 0 && (
+            <div style={styles.empty}>No items found matching "{searchQuery}"</div>
+          )}
         </div>
 
         {/* Cart footer */}

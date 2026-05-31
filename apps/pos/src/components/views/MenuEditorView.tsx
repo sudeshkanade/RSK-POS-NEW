@@ -239,7 +239,11 @@ export const MenuEditorView: React.FC = () => {
 
       <div className="space-y-12">
         {categories.map(cat => {
-          const filteredItems = cat.items.filter(i => i.name.toLowerCase().includes(search.toLowerCase()));
+          const filteredItems = cat.items.filter(
+            i =>
+              i.name.toLowerCase().includes(search.toLowerCase()) ||
+              (i.shortcutKey && String(i.shortcutKey).trim().toLowerCase().includes(search.trim().toLowerCase()))
+          );
           if (filteredItems.length === 0 && search) return null;
 
           return (

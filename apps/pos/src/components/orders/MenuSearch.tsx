@@ -47,7 +47,7 @@ export const MenuSearch: React.FC<MenuSearchProps> = ({ items, onItemSelect, aut
     ? items.filter(
         i =>
           i.name.toLowerCase().includes(query.toLowerCase()) ||
-          (i.shortcutKey && i.shortcutKey.toLowerCase().includes(query.toLowerCase()))
+          (i.shortcutKey && String(i.shortcutKey).trim().toLowerCase().includes(query.trim().toLowerCase()))
       )
     : [];
 
@@ -62,9 +62,9 @@ export const MenuSearch: React.FC<MenuSearchProps> = ({ items, onItemSelect, aut
       const trimmed = query.trim().toLowerCase();
       if (!trimmed) return;
 
-      // 1. Try to match exact shortcut key
+      // 1. Try to match exact shortcut key (robust trim and safe string conversion)
       const exactMatch = items.find(
-        i => i.shortcutKey && i.shortcutKey.toLowerCase() === trimmed
+        i => i.shortcutKey && String(i.shortcutKey).trim().toLowerCase() === trimmed
       );
       if (exactMatch) {
         select(exactMatch);

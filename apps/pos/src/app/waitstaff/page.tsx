@@ -173,6 +173,95 @@ export default function WaitstaffPage() {
   const cartCount = safeCart.reduce((s, c) => s + (c?.qty || 0), 0);
   const cartTotal = safeCart.reduce((s, c) => s + (c?.price || 0) * (c?.qty || 0), 0);
 
+  /* ─── Printing Helpers ──────────────────────────────────── */
+  const printKOT = async (tableName: string, items: { name: string; qty: number }[]) => {
+    try {
+      const W = 42;
+      const ctr = (s: string) => ' '.repeat(Math.max(0, Math.floor((W - s.length) / 2))) + s;
+      const hr  = '-'.repeat(W);
+      const date = new Date().toLocaleString('en-IN');
+
+      let r = `\n${ctr('KITCHEN ORDER TICKET')}\n`;
+      r += `${hr}\nDate: ${date}\nTable: ${tableName}\nStaff: ${staffName || 'Waitstaff'}\n${hr}\n`;
+      r += `${'ITEM'.padEnd(30)}QTY\n${hr}\n`;
+      items.forEach(i => {
+        r += `${i.name.substring(0, 28).padEnd(30)}${String(i.qty).padStart(3)}\n`;
+      });
+      r += `${hr}\n\n\n\n\n`;
+
+      await fetch('/api/print', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: r }),
+      });
+    } catch (e) {
+      console.error('Mobile KOT print failed:', e);
+    }
+  };
+
+  const printCheck = async () => {
+    if (!selectedTable || existingOrderItems.length === 0) return;
+    try {
+      const settings = await fetch('/api/settings').then(r => r.json());
+      const restName = settings.name || 'RestroOS';
+      const restAddress = settings.address || '';
+      const restPhone = settings.phone || '';
+      const gstRate = typeof settings.gstRate === 'number' ? settings.gstRate : 0;
+
+      const W = 42;
+      const ctr = (s: string) => ' '.repeat(Math.max(0, Math.floor((W - s.length) / 2))) + s;
+      const hr  = '-'.repeat(W);
+      const date = new Date().toLocaleString('en-IN');
+
+      const subtotal = existingOrderItems.reduce((sum, i) => sum + i.price * i.qty, 0);
+      const taxAmount = Math.round(subtotal * gstRate) / 100;
+      const grandTotal = subtotal + taxAmount;
+
+      let r = `\n${ctr(restName)}\n`;
+      if (restAddress) r += `${ctr(restAddress)}\n`;
+      if (restPhone)   r += `${ctr('Ph: ' + restPhone)}\n`;
+      
+      r += `${ctr('PRELIMINARY CHECK')}\n`;
+      r += `${hr}\nDate: ${date}\nTable: ${selectedTable.name}\nWaiter: ${staffName || 'Waitstaff'}\n${hr}\n`;
+      r += `${'ITEM'.padEnd(19)}${'QTY'.padStart(3).padEnd(7)}${'PRICE'.padStart(8).padEnd(11)}TOTAL\n${hr}\n`;
+      
+      existingOrderItems.forEach(i => {
+        r += `${i.name.substring(0, 18).padEnd(19)}${String(i.qty).padStart(3).padEnd(7)}${('₹' + i.price).padStart(8).padEnd(11)}₹${(i.price * i.qty).toFixed(2)}\n`;
+      });
+      r += `${hr}\n`;
+      r += `${'Subtotal'.padEnd(30)}₹${subtotal.toFixed(2).padStart(10)}\n`;
+      
+      if (gstRate > 0) {
+        const halfRate = (gstRate / 2).toFixed(1);
+        const halfGst = taxAmount / 2;
+        r += `${('CGST @ ' + halfRate + '%').padEnd(30)}₹${halfGst.toFixed(2).padStart(10)}\n`;
+        r += `${('SGST @ ' + halfRate + '%').padEnd(30)}₹${halfGst.toFixed(2).padStart(10)}\n`;
+        r += `${hr}\n`;
+        r += `${'GRAND TOTAL'.padEnd(30)}₹${grandTotal.toFixed(2).padStart(10)}\n`;
+      } else {
+        r += `${hr}\n`;
+        r += `${'GRAND TOTAL'.padEnd(30)}₹${subtotal.toFixed(2).padStart(10)}\n`;
+      }
+      
+      r += `${hr}\n\n${ctr('*** THIS IS NOT A BILL ***')}\n`;
+      r += `${ctr('PRELIMINARY CHECK')}\n\n\n\n\n`;
+
+      const res = await fetch('/api/print', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: r }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('🖨️ Bill check printed!');
+      } else {
+        showToast('❌ Printer offline or unreachable');
+      }
+    } catch (e) {
+      showToast('❌ Failed to print check');
+    }
+  };
+
   /* ─── Send order ────────────────────────────────────────── */
   const sendOrder = async () => {
     if (!selectedTable || safeCart.length === 0) return;
@@ -223,6 +312,13 @@ export default function WaitstaffPage() {
           tableId: selectedTable.id,
           tableName: selectedTable.name,
         });
+
+        // Trigger physical print of KOT to local network printer
+        try {
+          await printKOT(selectedTable.name, safeCart);
+        } catch (printErr) {
+          console.error('Failed to trigger KOT print:', printErr);
+        }
 
         setCart([]);
         setScreen('tables');
@@ -418,6 +514,31 @@ export default function WaitstaffPage() {
                     <span>₹{(item.price * item.qty).toFixed(2)}</span>
                   </div>
                 ))}
+                
+                <button
+                  onClick={printCheck}
+                  style={{
+                    marginTop: '10px',
+                    padding: '12px',
+                    background: '#10b981',
+                    border: 'none',
+                    borderRadius: '12px',
+                    color: '#000',
+                    fontWeight: 'bold',
+                    fontSize: '12px',
+                    textTransform: 'uppercase',
+                    cursor: 'pointer',
+                    letterSpacing: '0.05em',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    touchAction: 'manipulation',
+                    WebkitTapHighlightColor: 'transparent',
+                  }}
+                >
+                  🖨️ Print Bill Check
+                </button>
               </div>
             </details>
           </div>

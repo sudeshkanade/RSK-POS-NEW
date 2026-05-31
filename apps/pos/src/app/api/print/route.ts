@@ -1,12 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import net from 'net';
+import { prisma } from '../../../db';
+import { getRestaurantId } from '../../../services/license.server';
 
 export async function POST(req: NextRequest) {
   try {
-    const { text, printerIp = '192.168.1.100' } = await req.json();
+    const { text, printerIp } = await req.json();
 
     if (!text) {
       return NextResponse.json({ error: 'No text provided to print' }, { status: 400 });
+    }
+
+    let targetIp = printerIp;
+    if (!targetIp) {
+      const restaurantId = getRestaurantId() || 'rsk-restaurant-001';
+      const restaurant = await prisma.restaurant.findUnique({
+        where: { id: restaurantId },
+        select: { settings: true },
+      });
+      const settings = restaurant?.settings ? JSON.parse(restaurant.settings) : {};
+      targetIp = settings.printerIp || '192.168.1.100';
     }
 
     const PRINTER_PORT = 9100;
@@ -28,8 +41,8 @@ export async function POST(req: NextRequest) {
         resolve({ success: false, error: 'Timeout' });
       });
 
-      client.connect(PRINTER_PORT, printerIp, () => {
-        console.log(`[Print Pipeline] Connected to ${printerIp}:${PRINTER_PORT}`);
+      client.connect(PRINTER_PORT, targetIp, () => {
+        console.log(`[Print Pipeline] Connected to ${targetIp}:${PRINTER_PORT}`);
 
         // ESC/POS Initialization
         const init = Buffer.from([0x1B, 0x40]);

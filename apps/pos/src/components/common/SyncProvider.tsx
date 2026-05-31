@@ -15,6 +15,12 @@ export const SyncProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     syncService.startSyncLoop();
 
+    // Start SQLite local database polling loop for mobile orders
+    usePOSStore.getState().syncWithDb(); // run once immediately
+    const dbPollInterval = setInterval(() => {
+      usePOSStore.getState().syncWithDb();
+    }, 3000);
+
     const handleSync = (e: any) => {
       const { type, payload } = e.detail;
 
@@ -41,7 +47,10 @@ export const SyncProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     window.addEventListener('SOCKET_SYNC', handleSync);
-    return () => window.removeEventListener('SOCKET_SYNC', handleSync);
+    return () => {
+      window.removeEventListener('SOCKET_SYNC', handleSync);
+      clearInterval(dbPollInterval);
+    };
   }, [activeUser]); // Re-run when login state changes
 
   return <>{children}</>;

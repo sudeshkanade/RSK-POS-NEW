@@ -141,6 +141,14 @@ export default function WaitstaffPage() {
     };
   }, [loadTables, loadMenu, loadStaff]);
 
+  useEffect(() => {
+    if (screen !== 'tables') return;
+    const interval = setInterval(() => {
+      loadTables();
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [screen, loadTables]);
+
   /* ─── Cart helpers ──────────────────────────────────────── */
   const addToCart = (item: MenuItem) => {
     setCart(prev => {

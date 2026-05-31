@@ -52,6 +52,7 @@ interface POSState {
   // Initialization
   isInitialized: boolean;
   fetchInitialData: () => Promise<void>;
+  syncWithDb: () => Promise<void>;
 
   // Tables
   tables: Table[];
@@ -209,6 +210,144 @@ export const usePOSStore = create<POSState>()(
           });
         } catch (e) {
           console.error('Failed to load tables or active orders', e);
+        }
+      },
+
+      syncWithDb: async () => {
+        try {
+          const res = await fetch('/api/tables');
+          const tablesData = await res.json();
+          if (!Array.isArray(tablesData)) return;
+
+          // 1. Sync table statuses
+          set(state => {
+            const updatedTables = state.tables.map(t => {
+              const dbTable = tablesData.find((dt: any) => dt.id === t.id);
+              if (!dbTable) return t;
+              return {
+                ...t,
+                status: dbTable.status,
+                capacity: dbTable.capacity,
+                name: dbTable.name,
+                ...(state.isEditMode ? {} : { position: { x: dbTable.posX, y: dbTable.posY } })
+              };
+            });
+            return { tables: updatedTables };
+          });
+
+          // 2. Fetch pending orders from DB
+          const ordersRes = await fetch('/api/orders?status=PENDING');
+          const dbOrders = await ordersRes.json();
+          if (!Array.isArray(dbOrders)) return;
+
+          // Group DB orders by tableId
+          const dbOrdersByTable: Record<string, any[]> = {};
+          dbOrders.forEach((o: any) => {
+            if (!dbOrdersByTable[o.tableId]) dbOrdersByTable[o.tableId] = [];
+            dbOrdersByTable[o.tableId].push(o);
+          });
+
+          let newOrdersAlert: string[] = [];
+
+          set(state => {
+            const updatedOrders = { ...state.orders };
+
+            Object.entries(dbOrdersByTable).forEach(([tableId, ordersList]) => {
+              const dbItems: any[] = [];
+              let openedAt = new Date().toISOString();
+              let orderId: string | undefined = undefined;
+
+              ordersList.forEach(o => {
+                orderId = o.id;
+                openedAt = o.openedAt || openedAt;
+                (o.items || []).forEach((i: any) => {
+                  if (i.isVoided) return;
+                  const existing = dbItems.find(x => x.name === i.menuItem);
+                  if (existing) {
+                    existing.qty += i.qty;
+                  } else {
+                    dbItems.push({
+                      id: i.id,
+                      name: i.menuItem,
+                      qty: i.qty,
+                      price: i.price,
+                      isNew: false,
+                      isVoided: false,
+                    });
+                  }
+                });
+              });
+
+              const localOrder = updatedOrders[tableId];
+              if (!localOrder) {
+                // New order received!
+                const tableName = state.tables.find(t => t.id === tableId)?.name || tableId;
+                newOrdersAlert.push(tableName);
+                
+                updatedOrders[tableId] = {
+                  id: orderId,
+                  tableId,
+                  paymentMethod: null,
+                  openedAt,
+                  items: dbItems,
+                };
+              } else {
+                // Merge: Keep local items (isNew === true) and replace sent items (isNew === false) with DB items
+                const localNewItems = localOrder.items.filter(i => i.isNew && !i.isVoided);
+                const localVoidedItems = localOrder.items.filter(i => i.isVoided);
+                
+                const mergedItems = [...dbItems];
+                localNewItems.forEach(ln => {
+                  mergedItems.push(ln);
+                });
+                mergedItems.push(...localVoidedItems);
+
+                const dbTotalQty = dbItems.reduce((sum, i) => sum + i.qty, 0);
+                const localSentTotalQty = localOrder.items.filter(i => !i.isNew && !i.isVoided).reduce((sum, i) => sum + i.qty, 0);
+                if (dbTotalQty > localSentTotalQty && localOrder.id === orderId) {
+                  const tableName = state.tables.find(t => t.id === tableId)?.name || tableId;
+                  newOrdersAlert.push(tableName + " updated");
+                }
+
+                updatedOrders[tableId] = {
+                  ...localOrder,
+                  id: orderId || localOrder.id,
+                  items: mergedItems,
+                };
+              }
+            });
+
+            // Vacant tables in DB cleanup
+            Object.keys(updatedOrders).forEach(tableId => {
+              if (!dbOrdersByTable[tableId]) {
+                const localOrder = updatedOrders[tableId];
+                if (localOrder) {
+                  const hasUnsavedItems = localOrder.items.some(i => i.isNew && !i.isVoided);
+                  if (!hasUnsavedItems) {
+                    delete updatedOrders[tableId];
+                  }
+                }
+              }
+            });
+
+            return { orders: updatedOrders };
+          });
+
+          // Play speech synthesizer alert
+          if (newOrdersAlert.length > 0) {
+            newOrdersAlert.forEach(alertText => {
+              try {
+                if (typeof window !== 'undefined' && window.speechSynthesis) {
+                  const utterance = new SpeechSynthesisUtterance(`New order: ${alertText}`);
+                  window.speechSynthesis.speak(utterance);
+                }
+              } catch (err) {
+                console.error('SpeechSynthesis error:', err);
+              }
+            });
+          }
+        } catch (e) {
+          console.error('Local db polling sync failed:', e);
         }
       },
 
